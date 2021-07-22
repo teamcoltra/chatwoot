@@ -91,7 +91,6 @@ import contentTypeMixin from 'shared/mixins/contentTypeMixin';
 import BubbleActions from './bubble/Actions';
 import { MESSAGE_TYPE, MESSAGE_STATUS } from 'shared/constants/messages';
 import { generateBotMessageContent } from './helpers/botMessageContentHelper';
-import { stripStyleCharacters } from './helpers/EmailContentParser';
 
 export default {
   components: {
@@ -135,12 +134,18 @@ export default {
       const {
         email: {
           html_content: { full: fullHTMLContent, reply: replyHTMLContent } = {},
+          text_content: { full: fullTextContent, reply: replyTextContent } = {},
         } = {},
       } = this.contentAttributes;
 
-      if ((replyHTMLContent || fullHTMLContent) && this.isIncoming) {
-        let contentToBeParsed = replyHTMLContent || fullHTMLContent || '';
-        const parsedContent = stripStyleCharacters(contentToBeParsed);
+      let contentToBeParsed =
+        replyHTMLContent ||
+        replyTextContent ||
+        fullHTMLContent ||
+        fullTextContent ||
+        '';
+      if (contentToBeParsed && this.isIncoming) {
+        const parsedContent = this.stripStyleCharacters(contentToBeParsed);
         if (parsedContent) {
           return parsedContent;
         }
@@ -197,6 +202,9 @@ export default {
     hasAttachments() {
       return !!(this.data.attachments && this.data.attachments.length > 0);
     },
+    isMessageDeleted() {
+      return this.contentAttributes.deleted;
+    },
     hasImageAttachment() {
       if (this.hasAttachments && this.data.attachments.length > 0) {
         const { attachments = [{}] } = this.data;
@@ -208,10 +216,10 @@ export default {
     hasText() {
       return !!this.data.content;
     },
-    isMessageDeleted() {
-      return this.contentAttributes.deleted;
-    },
     sentByMessage() {
+      if (this.isMessageDeleted) {
+        return false;
+      }
       const { sender } = this;
       return this.data.message_type === 1 && !isEmptyObject(sender)
         ? {
