@@ -49,13 +49,11 @@ export default {
     },
     isContactPanelOpen: {
       type: Boolean,
-      default: false,
+      default: true,
     },
   },
   computed: {
-    ...mapGetters({
-      currentChat: 'getSelectedChat',
-    }),
+    ...mapGetters({ currentChat: 'getSelectedChat' }),
     showContactPanel() {
       return this.isContactPanelOpen && this.currentChat.id;
     },
@@ -121,7 +119,6 @@ export default {
     width: 100%;
     height: 100%;
     max-width: 100%;
-    padding: var(--space-normal) var(--space-two);
   }
 }
 </style>

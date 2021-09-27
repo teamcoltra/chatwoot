@@ -17,10 +17,11 @@
 #
 # Indexes
 #
-#  index_contacts_on_account_id         (account_id)
-#  index_contacts_on_pubsub_token       (pubsub_token) UNIQUE
-#  uniq_email_per_account_contact       (email,account_id) UNIQUE
-#  uniq_identifier_per_account_contact  (identifier,account_id) UNIQUE
+#  index_contacts_on_account_id                   (account_id)
+#  index_contacts_on_phone_number_and_account_id  (phone_number,account_id)
+#  index_contacts_on_pubsub_token                 (pubsub_token) UNIQUE
+#  uniq_email_per_account_contact                 (email,account_id) UNIQUE
+#  uniq_identifier_per_account_contact            (identifier,account_id) UNIQUE
 #
 
 class Contact < ApplicationRecord
@@ -47,6 +48,7 @@ class Contact < ApplicationRecord
   before_validation :prepare_email_attribute
   after_create_commit :dispatch_create_event, :ip_lookup
   after_update_commit :dispatch_update_event
+  after_destroy_commit :dispatch_destroy_event
 
   def get_source_id(inbox_id)
     contact_inboxes.find_by!(inbox_id: inbox_id).source_id
@@ -72,9 +74,12 @@ class Contact < ApplicationRecord
       id: id,
       name: name,
       avatar: avatar_url,
-      type: 'contact'
+      type: 'contact',
+      account: account.webhook_data
     }
   end
+
+  private
 
   def ip_lookup
     return unless account.feature_enabled?('ip_lookup')
@@ -94,5 +99,9 @@ class Contact < ApplicationRecord
 
   def dispatch_update_event
     Rails.configuration.dispatcher.dispatch(CONTACT_UPDATED, Time.zone.now, contact: self)
+  end
+
+  def dispatch_destroy_event
+    Rails.configuration.dispatcher.dispatch(CONTACT_DELETED, Time.zone.now, contact: self)
   end
 end

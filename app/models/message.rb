@@ -29,6 +29,7 @@
 #
 
 class Message < ApplicationRecord
+  include MessageFilterHelpers
   NUMBER_OF_PERMITTED_ATTACHMENTS = 15
 
   validates :account_id, presence: true
@@ -81,9 +82,6 @@ class Message < ApplicationRecord
   has_many :attachments, dependent: :destroy, autosave: true, before_add: :validate_attachments_limit
   has_one :csat_survey_response, dependent: :destroy
 
-  after_create :reopen_conversation,
-               :notify_via_mail
-
   after_create_commit :execute_after_create_commit_callbacks
 
   after_update_commit :dispatch_update_event
@@ -105,12 +103,8 @@ class Message < ApplicationRecord
 
   def merge_sender_attributes(data)
     data.merge!(sender: sender.push_event_data) if sender && !sender.is_a?(AgentBot)
-    data.merge!(sender: sender.push_event_data(inbox)) if sender&.is_a?(AgentBot)
+    data.merge!(sender: sender.push_event_data(inbox)) if sender.is_a?(AgentBot)
     data
-  end
-
-  def reportable?
-    incoming? || outgoing?
   end
 
   def webhook_data
@@ -130,10 +124,19 @@ class Message < ApplicationRecord
     }
   end
 
+  def content
+    # move this to a presenter
+    return self[:content] if !input_csat? || inbox.web_widget?
+
+    I18n.t('conversations.survey.response', link: "#{ENV['FRONTEND_URL']}/survey/responses/#{conversation.uuid}")
+  end
+
   private
 
   def execute_after_create_commit_callbacks
     # rails issue with order of active record callbacks being executed https://github.com/rails/rails/issues/20911
+    reopen_conversation
+    notify_via_mail
     set_conversation_activity
     dispatch_create_events
     send_reply
@@ -142,7 +145,7 @@ class Message < ApplicationRecord
   end
 
   def update_contact_activity
-    sender.update(last_activity_at: DateTime.now) if sender&.is_a?(Contact)
+    sender.update(last_activity_at: DateTime.now) if sender.is_a?(Contact)
   end
 
   def dispatch_create_events
@@ -164,7 +167,10 @@ class Message < ApplicationRecord
   end
 
   def reopen_conversation
-    conversation.open! if incoming? && conversation.resolved? && !conversation.muted?
+    return if conversation.muted?
+    return unless incoming?
+
+    conversation.open! if conversation.resolved? || conversation.snoozed?
   end
 
   def execute_message_template_hooks
@@ -172,7 +178,7 @@ class Message < ApplicationRecord
   end
 
   def email_notifiable_message?
-    return false unless outgoing?
+    return false unless outgoing? || input_csat?
     return false if private?
 
     true

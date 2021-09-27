@@ -1,7 +1,7 @@
 class ApplicationMailbox < ActionMailbox::Base
   # Last part is the regex for the UUID
   # Eg: email should be something like : reply+6bdc3f4d-0bec-4515-a284-5d916fdde489@domain.com
-  REPLY_EMAIL_USERNAME_PATTERN = /^reply\+([0-9a-f]{8}\b-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-\b[0-9a-f]{12})$/i.freeze
+  REPLY_EMAIL_USERNAME_PATTERN = /^reply\+([0-9a-f]{8}\b-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-\b[0-9a-f]{12})$/i
 
   def self.reply_mail?
     proc do |inbound_mail_obj|
@@ -22,7 +22,7 @@ class ApplicationMailbox < ActionMailbox::Base
     proc do |inbound_mail_obj|
       is_a_support_email = false
       inbound_mail_obj.mail.to&.each do |email|
-        channel = Channel::Email.find_by('email = ? OR forward_to_email = ?', email, email)
+        channel = Channel::Email.find_by('lower(email) = ? OR lower(forward_to_email) = ?', email.downcase, email.downcase)
         if channel.present?
           is_a_support_email = true
           break

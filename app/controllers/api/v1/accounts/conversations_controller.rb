@@ -1,5 +1,6 @@
 class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseController
   include Events::Types
+  include DateRangeHelper
 
   before_action :conversation, except: [:index, :meta, :search, :create]
   before_action :contact_inbox, only: [:create]
@@ -49,9 +50,8 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
 
   def toggle_status
     if params[:status]
-      status = params[:status] == 'bot' ? 'pending' : params[:status]
-      @conversation.status = status
-      @status = @conversation.save
+      set_conversation_status
+      @status = @conversation.save!
     else
       @status = @conversation.toggle_status
     end
@@ -69,10 +69,22 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
 
   def update_last_seen
     @conversation.agent_last_seen_at = DateTime.now.utc
+    @conversation.assignee_last_seen_at = DateTime.now.utc if assignee?
+    @conversation.save!
+  end
+
+  def custom_attributes
+    @conversation.custom_attributes = params.permit(custom_attributes: {})[:custom_attributes]
     @conversation.save!
   end
 
   private
+
+  def set_conversation_status
+    status = params[:status] == 'bot' ? 'pending' : params[:status]
+    @conversation.status = status
+    @conversation.snoozed_until = parse_date_time(params[:snoozed_until].to_s) if params[:snoozed_until]
+  end
 
   def trigger_typing_event(event)
     user = current_user.presence || @resource
@@ -106,6 +118,7 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
 
   def conversation_params
     additional_attributes = params[:additional_attributes]&.permit! || {}
+    custom_attributes = params[:custom_attributes]&.permit! || {}
     status = params[:status].present? ? { status: params[:status] } : {}
 
     # TODO: temporary fallback for the old bot status in conversation, we will remove after couple of releases
@@ -115,11 +128,17 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
       inbox_id: @contact_inbox.inbox_id,
       contact_id: @contact_inbox.contact_id,
       contact_inbox_id: @contact_inbox.id,
-      additional_attributes: additional_attributes
+      additional_attributes: additional_attributes,
+      custom_attributes: custom_attributes,
+      snoozed_until: params[:snoozed_until]
     }.merge(status)
   end
 
   def conversation_finder
     @conversation_finder ||= ConversationFinder.new(current_user, params)
+  end
+
+  def assignee?
+    @conversation.assignee_id? && current_user == @conversation.assignee
   end
 end

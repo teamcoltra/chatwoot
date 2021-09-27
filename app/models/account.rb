@@ -21,7 +21,8 @@ class Account < ApplicationRecord
   include Featurable
 
   DEFAULT_QUERY_SETTING = {
-    flag_query_mode: :bit_operator
+    flag_query_mode: :bit_operator,
+    check_for_column: false
   }.freeze
 
   ACCOUNT_SETTINGS_FLAGS = {
@@ -50,6 +51,8 @@ class Account < ApplicationRecord
   has_many :web_widgets, dependent: :destroy, class_name: '::Channel::WebWidget'
   has_many :email_channels, dependent: :destroy, class_name: '::Channel::Email'
   has_many :api_channels, dependent: :destroy, class_name: '::Channel::Api'
+  has_many :line_channels, dependent: :destroy, class_name: '::Channel::Line'
+  has_many :telegram_channels, dependent: :destroy, class_name: '::Channel::Telegram'
   has_many :canned_responses, dependent: :destroy
   has_many :webhooks, dependent: :destroy
   has_many :labels, dependent: :destroy
@@ -61,6 +64,8 @@ class Account < ApplicationRecord
   has_many :kbase_articles, dependent: :destroy, class_name: '::Kbase::Article'
   has_many :teams, dependent: :destroy
   has_many :custom_filters, dependent: :destroy
+  has_many :custom_attribute_definitions, dependent: :destroy
+
   has_flags ACCOUNT_SETTINGS_FLAGS.merge(column: 'settings_flags').merge(DEFAULT_QUERY_SETTING)
 
   enum locale: LANGUAGES_CONFIG.map { |key, val| [val[:iso_639_1_code], key] }.to_h
